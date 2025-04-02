@@ -40,6 +40,55 @@ Redshift is structured into three layers to optimize data processing and reporti
 2. **Curated Layer**: Contains cleaned and transformed data, removing duplicates and handling inconsistencies.
 3. **Presentation Layer**: Stores aggregated and precomputed metrics for business intelligence and reporting.
 
+
+## **Resources to Be Created**
+
+### **1. RDS Tables (MySQL - Source Data)**
+The following tables exist in the **RDS MySQL** database and will be extracted:
+- `apartment_attributes`
+- `apartments`
+- `bookings`
+- `user_viewing`
+
+### **2. Amazon S3 Buckets and Folder Structure**
+The data pipeline uses **Amazon S3** to temporarily store extracted data before loading it into Redshift.
+
+- **Bucket Name:** `s3://rental-marketplace/`
+- **Folder Structure:**
+  - `s3://rental-marketplace/raw-data/` → Stores extracted CSV data from RDS.
+  - `s3://rental-marketplace/temp/` → Temporary storage for Redshift operations.
+
+### **3. Amazon Redshift Tables**
+The pipeline creates and populates tables in the **Amazon Redshift** data warehouse within different schemas:
+
+#### **Raw Layer (`raw_data` Schema)**
+- `apartment_attributes`
+- `apartments`
+- `bookings`
+- `user_viewing`
+
+#### **Curated Layer (`curated` Schema)**
+- Cleaned and transformed versions of the raw tables.
+
+#### **Presentation Layer (`presentation` Schema)**
+The final aggregated business insights:
+- `average_listing_price` → Average rental listing price per week.
+- `occupancy_rate` → Monthly occupancy rate based on bookings.
+- `popular_cities` → Most frequently booked cities per week.
+- `top_listings` → Top-performing listings ranked by revenue.
+- `bookings_per_user` → Total number of bookings per user.
+- `avg_booking_duration` → Average length of stay for confirmed bookings.
+- `repeat_customers` → Number of repeat customers who booked within 30 days.
+
+### **4. AWS Glue Jobs**
+The ETL pipeline is orchestrated using **AWS Glue** with the following jobs:
+
+1. **ExtractRDSDataToS3** → Extracts MySQL data from RDS and saves it as CSV files in S3.
+2. **LoadRawDataToRedshift** → Loads raw CSV files from S3 into the `raw_data` schema in Redshift.
+3. **TransformAndLoadCuratedData** → Cleans and processes data before loading it into the `curated` schema.
+4. **ComputeMetricsAndLoadPresentation** → Computes business metrics and loads results into the `presentation` schema.
+
+
 ## Orchestration using AWS Step Functions
 
 - Step Functions define the ETL workflow for automation.
