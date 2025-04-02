@@ -48,16 +48,19 @@ def load_redshift_table(table_name):
     """
     
     logger.info(f"Loading {table_name} from Redshift...")
+
+    # Read data from Redshift
     return (
         spark.read.format("jdbc")
         .option("url", jdbc_url)
-        .option("dbtable", f"raw_data.{table_name}")
+        .option("dbtable", f"curated.{table_name}")
         .option("user", redshift_user)
         .option("password", redshift_password)
         .option("driver", "com.amazon.redshift.jdbc.Driver")
         .load()
     )
 
+# Load data into DataFrames
 apartment_attributes_df = load_redshift_table("apartment_attributes")
 apartments_df = load_redshift_table("apartments")
 bookings_df = load_redshift_table("bookings")
@@ -66,7 +69,7 @@ user_viewing_df = load_redshift_table("user_viewing")
 # Rental Performance Metrics
 logger.info("Calculating rental performance metrics...")
 
-# 1. Average Listing Price per Week
+# Average Listing Price per Week
 avg_price_weekly = (
     apartments_df.filter(col("is_active") == True)
     .withColumn("listing_created_on", to_date(col("listing_created_on")))
@@ -74,28 +77,22 @@ avg_price_weekly = (
     .agg(avg(col("price").cast("decimal(10,2)"))).alias("average_listing_price")
 )
 
-# 2. Occupancy Rate per Month
+# Occupancy Rate per Month
 occupancy_rate_monthly = (
     bookings_df.groupBy(month(col("checkin_date")).alias("month"))
     .agg((count("booking_id") / 30 * 100).alias("occupancy_rate"))
     .orderBy(col("month"))
 )
 
-# 3. Most frequently booked cities per week
+# Most frequently booked cities per week
 popular_cities = (
     bookings_df.join(apartment_attributes_df, bookings_df.apartment_id == apartment_attributes_df.id)
     .groupBy("cityname", weekofyear(col("booking_date")).alias("week"))
     .agg(count(col("booking_id").cast("int")).alias("booking_count"))
     .orderBy(col("booking_count").desc())
 )
-# popular_cities = (
-#     bookings_df.join(apartment_attributes_df, bookings_df.apartment_id == apartment_attributes_df.id)
-#     .groupBy("cityname")
-#     .agg(count("booking_id").alias("booking_count"))
-#     .orderBy(col("week"))
-# )
 
-# 4. Top Performing Listings by Revenue per Week
+# Top Performing Listings by Revenue per Week
 top_listings = (
     bookings_df.filter(col("booking_status") == "confirmed")
     .groupBy("apartment_id", weekofyear(col("booking_date")).alias("week"))
@@ -106,19 +103,14 @@ top_listings = (
 # User Engagement Metrics
 logger.info("Calculating user engagement metrics...")
 
-# 1. Total Bookings per User
+# Total Bookings per User
 bookings_per_user = (
     bookings_df.groupBy("user_id", weekofyear(col("booking_date")).alias("week"))
     .agg(count("booking_id").alias("total_bookings"))
     .orderBy(col("user_id"))
 )
 
-# 2. Average Booking Duration
-# avg_booking_duration = (
-#     bookings_df.filter(col("booking_status") == "confirmed")
-#     .agg(avg(datediff(col("checkout_date"), col("checkin_date"))).alias("avg_booking_duration"))
-# )
-
+# Average Booking Duration per Week
 avg_booking_duration = (
     bookings_df.filter(col("booking_status") == "confirmed")
     .withColumn("booking_duration", datediff(col("checkout_date"), col("checkin_date")))
@@ -128,16 +120,12 @@ avg_booking_duration = (
     .orderBy("week")
 )
 
-# 3. Repeat Customer Rate
-# window_spec = Window.partitionBy("user_id").orderBy("booking_date")
-# repeat_customers = (
-#     bookings_df.withColumn("next_booking_date", lead("booking_date").over(window_spec))
-#     .filter(datediff(col("next_booking_date"), col("booking_date")) <= 30)
-#     .agg(count("user_id").alias("repeat_customers"))
-# )
+# Repeat Customer Rate per Week
 
+# Calculate the next booking date for each user
 window_spec = Window.partitionBy("user_id").orderBy("booking_date")
 
+# Calculate repeat customers for each week
 repeat_customers = (
     bookings_df.withColumn("next_booking_date", lead("booking_date").over(window_spec))
     .withColumn("days_between_bookings", datediff(col("next_booking_date"), col("booking_date")))
@@ -149,7 +137,24 @@ repeat_customers = (
 
 # Load Metrics into Redshift Presentation Layer
 def write_to_redshift(df, table_name):
+    """
+    Write a Spark DataFrame to a Redshift table in the Presentation Layer.
+
+    Args:
+        df (Spark DataFrame): The DataFrame to write to Redshift.
+        table_name (str): The name of the table to write to.
+
+    Returns:
+        None
+
+    """
+    
+    logger.info(f"Loading {table_name} into Redshift Presentation Layer...")
+
+    # Convert Spark DataFrame to Glue DynamicFrame
     dynamic_df = DynamicFrame.fromDF(df, glueContext, table_name)
+
+    # Load into Redshift Presentation Layer
     glueContext.write_dynamic_frame.from_options(
         frame=dynamic_df,
         connection_type="redshift",

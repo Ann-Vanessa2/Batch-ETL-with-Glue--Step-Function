@@ -33,9 +33,10 @@ s3_bucket = args["S3_BUCKET"]
 iam_role = args["IAM_ROLE"]
 redshift_db = args["REDSHIFT_DB"]
 
+# Defining tables
 tables = ["apartment_attributes", "apartments", "bookings", "user_viewing"]
 
-# Defining tables and their expected schema
+# Defining tables and their expected schema to ensure correct data types when loading into Redshift
 TABLE_SCHEMA = {
     "apartment_attributes": {
         "id": "int",
@@ -67,15 +68,6 @@ TABLE_SCHEMA = {
         "viewed_at": "date"}
 }
 
-# Define default values for missing data (excluding dates)
-DEFAULT_VALUES = {
-    "int": 0,
-    "decimal(10,2)": 0.0,
-    "decimal(10,8)": 0.0,
-    "decimal(11,8)": 0.0,
-    "string": "N/A"
-}
-
 def clean_data(df, table_name):
     """
     Perform data cleaning operations on the DataFrame by filling missing values and removing duplicates.
@@ -89,15 +81,6 @@ def clean_data(df, table_name):
 
     # Dropping duplicates
     df = df.dropDuplicates()
-
-    # Handling missing values
-    # for column, dtype in schema.items():
-    #     if isinstance(dtype, StringType):
-    #         df = df.fillna({column: "Unknown"})  # Replace null strings with 'Unknown'
-    #     elif isinstance(dtype, IntegerType):
-    #         df = df.fillna({column: 0})  # Replace null integers with 0
-    #     elif isinstance(dtype, DoubleType):
-    #         df = df.fillna(df.select(mean(col(column))).collect()[0][0] or 0.0)  # Replace null doubles with mean
     
     # Replace missing values in 'pets_allowed' with "False"
     if table_name == "apartment_attributes":
@@ -114,8 +97,10 @@ def clean_data(df, table_name):
 # jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
 jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
 
+# Iterating over tables
 for table in tables:
     try:
+        # Defining S3 path
         s3_path = f's3://{s3_bucket}/raw-data/{table}/'
         logger.info(f"Processing {table} from {s3_path} to Redshift...")
 
@@ -149,7 +134,6 @@ for table in tables:
             
         )
         
-        # df = spark.read.format("jdbc").options(**connection_options).load()
         logger.info(f"{table} successfully loaded into Redshift Raw Layer.")
 
     except Exception as e:

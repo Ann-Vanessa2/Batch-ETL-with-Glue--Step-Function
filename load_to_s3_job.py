@@ -34,10 +34,14 @@ S3_BUCKET = args["S3_BUCKET"]
 # jdbc_url = f"jdbc:{RDS_HOST}:3306/{RDS_DB}?useSSL=false"
 jdbc_url = f"jdbc:mysql://{RDS_HOST}:3306/{RDS_DB}?useSSL=false&allowPublicKeyRetrieval=true"
 
+# Fetch data from RDS
 tables = ["apartment_attributes", "apartments", "bookings", "user_viewing"]
+
+# Process each table
 for table in tables:
     try:
         logger.info(f"Processing table: {table}...")
+        # Read data from RDS
         df = spark.read.format("jdbc") \
             .option("url", jdbc_url) \
             .option("dbtable", table) \
@@ -46,6 +50,7 @@ for table in tables:
             .option("driver", "com.mysql.cj.jdbc.Driver") \
             .load()
 
+        # Check if the DataFrame is empty
         if df.isEmpty():
             logger.info(f"Skipping {table} - No data found.")
             continue

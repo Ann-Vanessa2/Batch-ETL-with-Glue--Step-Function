@@ -32,6 +32,7 @@ s3_bucket = args["S3_BUCKET"]
 iam_role = args["IAM_ROLE"]
 redshift_db = args["REDSHIFT_DB"]
 
+# List of tables
 tables = ["apartment_attributes", "apartments", "bookings", "user_viewing"]
 
 # Define tables and their expected schema
@@ -70,8 +71,10 @@ TABLE_SCHEMA = {
 # jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
 jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
 
+# Iterate over tables
 for table in tables:
     try:
+        # Define S3 path
         s3_path = f's3://{s3_bucket}/raw-data/{table}/'
         logger.info(f"Loading {table} from {s3_path} to Redshift...")
 
@@ -101,40 +104,8 @@ for table in tables:
                 "aws_iam_role": iam_role
             },
             
-            # transformation_ctx=f"load_raw_{table}"
         )
-
-        # # COPY Command to load data into Redshift
-        # copy_sql = f"""
-        # COPY raw_data.{table}
-        # FROM '{s3_path}'
-        # IAM_ROLE '{iam_role}'
-        # DELIMITER ','
-        # FORMAT AS CSV
-        # IGNOREHEADER 1;
-        # """
-
-        # logger.info(f"Executing COPY command for {table}...")
-
-        # # JDBC Connection Properties
-        # connection_options = {
-        #     "url": redshift_url,
-        #     "user": redshift_user,
-        #     "password": redshift_password,
-        #     "dbtable": f"( {copy_sql} )",
-        #     # "driver": "com.amazon.redshift.jdbc.Driver"
-        # }
-
-        # # Execute SQL command using Spark JDBC
-        # # spark.read.format("jdbc") \
-        # #     .option("url", jdbc_url) \
-        # #     .option("dbtable", f"( {copy_sql} ) as copy_query") \
-        # #     .option("user", redshift_user) \
-        # #     .option("password", redshift_password) \
-        # #     .option("driver", "com.amazon.redshift.jdbc.Driver") \
-        # #     .load()
         
-        # df = spark.read.format("jdbc").options(**connection_options).load()
         logger.info(f"{table} successfully loaded into Redshift Raw Layer.")
 
     except Exception as e:
