@@ -91,21 +91,30 @@ def clean_data(df, table_name):
     df = df.dropDuplicates()
 
     # Handling missing values
-    for column, dtype in schema.items():
-        if isinstance(dtype, StringType):
-            df = df.fillna({column: "Unknown"})  # Replace null strings with 'Unknown'
-        elif isinstance(dtype, IntegerType):
-            df = df.fillna({column: 0})  # Replace null integers with 0
-        elif isinstance(dtype, DoubleType):
-            df = df.fillna(df.select(mean(col(column))).collect()[0][0] or 0.0)  # Replace null doubles with mean
+    # for column, dtype in schema.items():
+    #     if isinstance(dtype, StringType):
+    #         df = df.fillna({column: "Unknown"})  # Replace null strings with 'Unknown'
+    #     elif isinstance(dtype, IntegerType):
+    #         df = df.fillna({column: 0})  # Replace null integers with 0
+    #     elif isinstance(dtype, DoubleType):
+    #         df = df.fillna(df.select(mean(col(column))).collect()[0][0] or 0.0)  # Replace null doubles with mean
     
+    # Replace missing values in 'pets_allowed' with "False"
+    if table_name == "apartment_attributes":
+        df = df.fillna({"pets_allowed": "False"})
+
+    # Delete rows with missing values
+    df = df.dropna()
+
+    logger.info(f"Data cleaning for {table_name} completed")
+
     return df
 
 # Establish Connection
 # jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
 jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
 
-for table, schema in tables:
+for table in tables:
     try:
         s3_path = f's3://{s3_bucket}/raw-data/{table}/'
         logger.info(f"Processing {table} from {s3_path} to Redshift...")
