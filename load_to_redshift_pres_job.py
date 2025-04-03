@@ -6,7 +6,7 @@ from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
 from awsglue.dynamicframe import DynamicFrame
-from pyspark.sql.functions import col, avg, count, sum, weekofyear, month, datediff, lead, to_date, countDistinct
+from pyspark.sql.functions import col, avg, count, sum, round, abs, weekofyear, month, datediff, lead, to_date, countDistinct
 from pyspark.sql.window import Window
 
 # Configure logging
@@ -32,7 +32,8 @@ iam_role = args["IAM_ROLE"]
 redshift_db = args["REDSHIFT_DB"]
 
 # JDBC Connection URL
-jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
+# jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
+jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
 
 # Load Redshift tables into DataFrames
 logger.info("Extracting data from Redshift...")
@@ -74,7 +75,11 @@ avg_price_weekly = (
     apartments_df.filter(col("is_active") == True)
     .withColumn("listing_created_on", to_date(col("listing_created_on")))
     .groupBy(weekofyear(col("listing_created_on")).cast("int").alias("week"))
-    .agg(avg(col("price").cast("decimal(10,2)"))).alias("average_listing_price")
+    .agg(
+        round(avg(col("price")), 2)
+        .cast("decimal(10,2)") # Cast to decimal
+        .alias("average_listing_price")
+    )
 )
 
 # Occupancy Rate per Month
@@ -88,7 +93,12 @@ occupancy_rate_monthly = (
 popular_cities = (
     bookings_df.join(apartment_attributes_df, bookings_df.apartment_id == apartment_attributes_df.id)
     .groupBy("cityname", weekofyear(col("booking_date")).alias("week"))
-    .agg(count(col("booking_id").cast("int")).alias("booking_count"))
+    # .agg(count(col("booking_id").cast("int")).alias("booking_count"))
+    .agg(
+        count(col("booking_id"))
+        .cast("int")  # Ensure Redshift-compatible INT type
+        .alias("booking_count")
+    )
     .orderBy(col("booking_count").desc())
 )
 
@@ -96,7 +106,12 @@ popular_cities = (
 top_listings = (
     bookings_df.filter(col("booking_status") == "confirmed")
     .groupBy("apartment_id", weekofyear(col("booking_date")).alias("week"))
-    .agg(sum(col("total_price").cast("decimal(10,2)")).alias("total_revenue"))
+    # .agg(sum(col("total_price").cast("decimal(10,2)")).alias("total_revenue"))
+    .agg(
+        sum(col("total_price"))
+        .cast("decimal(10,2)")  # Ensure correct decimal type
+        .alias("total_revenue")
+    )
     .orderBy(col("total_revenue").desc())
 )
 
@@ -106,17 +121,27 @@ logger.info("Calculating user engagement metrics...")
 # Total Bookings per User
 bookings_per_user = (
     bookings_df.groupBy("user_id", weekofyear(col("booking_date")).alias("week"))
-    .agg(count("booking_id").alias("total_bookings"))
+    # .agg(count("booking_id").alias("total_bookings"))
+    .agg(
+        count(col("booking_id"))
+        .cast("int")  # Ensure Redshift-compatible INT type
+        .alias("total_bookings")
+    )
     .orderBy(col("user_id"))
 )
 
 # Average Booking Duration per Week
 avg_booking_duration = (
     bookings_df.filter(col("booking_status") == "confirmed")
-    .withColumn("booking_duration", datediff(col("checkout_date"), col("checkin_date")))
+    .withColumn("booking_duration", abs(datediff(col("checkout_date"), col("checkin_date"))))
     .withColumn("week", weekofyear(col("booking_date")))
     .groupBy("week")
-    .agg(avg("booking_duration").alias("avg_booking_duration"))
+    # .agg(avg("booking_duration").alias("avg_booking_duration"))
+    .agg(
+        round(avg("booking_duration"), 2)  # Round to 2 decimal places
+        .cast("decimal(10,2)")  # Ensure correct type for Redshift
+        .alias("avg_booking_duration")
+    )
     .orderBy("week")
 )
 
@@ -131,7 +156,12 @@ repeat_customers = (
     .withColumn("days_between_bookings", datediff(col("next_booking_date"), col("booking_date")))
     .filter(col("days_between_bookings") <= 30)
     .groupBy(weekofyear(col("booking_date")).alias("week"))
-    .agg(countDistinct("user_id").alias("repeat_customers"))
+    # .agg(countDistinct("user_id").alias("repeat_customers"))
+    .agg(
+        countDistinct("user_id")
+        .cast("int")  # Ensure Redshift-compatible INT type
+        .alias("repeat_customers")
+    )
     .orderBy("week")
 )
 

@@ -69,7 +69,9 @@ TABLE_SCHEMA = {
 
 # Establish Connection
 # jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
-jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
+# jdbc_url = f"jdbc:redshift://redshift-cluster-1.c8qaashqkmcg.eu-west-1.redshift.amazonaws.com:5439/dev"
+jdbc_url = f"jdbc:redshift://{redshift_url}:5439/{redshift_db}"
+
 
 # Iterate over tables
 for table in tables:
